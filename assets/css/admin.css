@@ -1,405 +1,578 @@
 /* ==========================================================================
-   OptiForge Image Optimizer — Complete Admin Stylesheet
+   OptiForge Image Optimizer — Ultra-Premium SaaS Design Engine (v1.3.2)
    ========================================================================== */
 
 :root {
-	--ofio-primary:       #2271b1;
-	--ofio-primary-dark:  #135e96;
-	--ofio-primary-light: #e8f0fb;
-	--ofio-success:       #00a32a;
-	--ofio-success-bg:    #d7f0dc;
-	--ofio-warning:       #dba617;
-	--ofio-warning-bg:    #fcf0d5;
-	--ofio-error:         #d63638;
-	--ofio-error-bg:      #fce8e8;
-	--ofio-neutral:       #787c82;
-	--ofio-neutral-bg:    #f0f0f1;
-	--ofio-bg:            #f0f0f1;
-	--ofio-card-bg:       #ffffff;
-	--ofio-border:        #c3c4c7;
-	--ofio-text:          #1d2327;
-	--ofio-text-muted:    #50575e;
-	--ofio-radius:        8px;
-	--ofio-radius-sm:     4px;
-	--ofio-shadow:        0 1px 3px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.05);
-	--ofio-shadow-hover:  0 4px 16px rgba(0,0,0,.12);
-	--ofio-transition:    0.2s ease;
+    --ofio-bg: #f8fafc;
+    --ofio-card-bg: #ffffff;
+    --ofio-border: #e2e8f0;
+    --ofio-border-hover: #cbd5e1;
+    --ofio-text-main: #0f172a;
+    --ofio-text-muted: #64748b;
+    --ofio-primary: #2563eb;
+    --ofio-primary-hover: #1d4ed8;
+    --ofio-primary-light: #eff6ff;
+    --ofio-success: #10b981;
+    --ofio-success-light: #ecfdf5;
+    --ofio-purple: #8b5cf6;
+    --ofio-purple-light: #f5f3ff;
+    --ofio-amber: #f59e0b;
+    --ofio-amber-light: #fffbeb;
+    --ofio-danger: #ef4444;
+    --ofio-danger-light: #fef2f2;
+    --ofio-radius: 14px;
+    --ofio-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+    --ofio-shadow-md: 0 6px 16px -2px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
+    --ofio-shadow-lg: 0 14px 28px -4px rgba(15, 23, 42, 0.08), 0 6px 12px -2px rgba(15, 23, 42, 0.04);
 }
 
 .ofio-wrap {
-	max-width: 1200px;
-	padding: 0 20px 60px;
+    max-width: 1140px;
+    margin: 25px auto 40px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    color: var(--ofio-text-main);
+    box-sizing: border-box;
 }
 
+.ofio-wrap * {
+    box-sizing: border-box;
+}
+
+/* ================= HEADER ================= */
 .ofio-page-title {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	margin: 20px 0 24px !important;
-	font-size: 1.55rem !important;
-	font-weight: 700;
-	color: var(--ofio-text);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--ofio-text-main);
+    margin: 0 0 28px 0;
 }
 
 .ofio-page-title .dashicons {
-	font-size: 1.6rem;
-	width: 1.6rem;
-	height: 1.6rem;
-	color: var(--ofio-primary);
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+    color: var(--ofio-primary);
 }
 
 .ofio-version {
-	font-size: 0.72rem;
-	font-weight: 400;
-	color: var(--ofio-neutral);
-	background: var(--ofio-neutral-bg);
-	border-radius: 20px;
-	padding: 2px 10px;
-	margin-left: 4px;
-	vertical-align: middle;
+    font-size: 11px;
+    background: #e0f2fe;
+    color: #0284c7;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    border: 1px solid #bae6fd;
 }
 
+/* ================= 4-CARD METRIC GRID ================= */
 .ofio-cards {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-	gap: 16px;
-	margin-bottom: 28px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 28px;
+}
+
+@media (max-width: 1024px) {
+    .ofio-cards { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+    .ofio-cards { grid-template-columns: 1fr; }
 }
 
 .ofio-card {
-	background: var(--ofio-card-bg);
-	border: 1px solid var(--ofio-border);
-	border-radius: var(--ofio-radius);
-	box-shadow: var(--ofio-shadow);
-	padding: 24px 20px;
-	text-align: center;
-	transition: transform var(--ofio-transition), box-shadow var(--ofio-transition);
+    background: var(--ofio-card-bg);
+    border: 1px solid var(--ofio-border);
+    border-radius: var(--ofio-radius);
+    padding: 22px 24px;
+    box-shadow: var(--ofio-shadow-sm);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
 }
 
 .ofio-card:hover {
-	transform: translateY(-3px);
-	box-shadow: var(--ofio-shadow-hover);
+    transform: translateY(-3px);
+    border-color: var(--ofio-border-hover);
+    box-shadow: var(--ofio-shadow-md);
 }
 
 .ofio-card__icon {
-	font-size: 2rem;
-	width: 2rem;
-	height: 2rem;
-	color: var(--ofio-primary);
-	margin-bottom: 10px;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: 14px;
+    transition: transform 0.2s ease;
+}
+
+.ofio-card:hover .ofio-card__icon {
+    transform: scale(1.08);
+}
+
+.ofio-card:nth-child(1) .ofio-card__icon {
+    background: var(--ofio-primary-light);
+    color: var(--ofio-primary);
+}
+
+.ofio-card:nth-child(2) .ofio-card__icon {
+    background: var(--ofio-success-light);
+    color: #059669;
+}
+
+.ofio-card:nth-child(3) .ofio-card__icon {
+    background: var(--ofio-purple-light);
+    color: var(--ofio-purple);
+}
+
+.ofio-card:nth-child(4) .ofio-card__icon {
+    background: #fff7ed;
+    color: #ea580c;
 }
 
 .ofio-card__value {
-	font-size: 2rem;
-	font-weight: 700;
-	color: var(--ofio-text);
-	line-height: 1.1;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--ofio-text-main);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
 }
 
 .ofio-card__label {
-	margin-top: 6px;
-	font-size: 0.78rem;
-	color: var(--ofio-neutral);
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ofio-text-muted);
 }
 
+/* ================= BULK BOX WORKSPACE ================= */
 .ofio-bulk-box {
-	background: var(--ofio-card-bg);
-	border: 1px solid var(--ofio-border);
-	border-radius: var(--ofio-radius);
-	box-shadow: var(--ofio-shadow);
-	padding: 28px 32px;
-	margin-bottom: 28px;
+    background: var(--ofio-card-bg);
+    border: 1px solid var(--ofio-border);
+    border-radius: 16px;
+    padding: 30px;
+    box-shadow: var(--ofio-shadow-sm);
+    margin-bottom: 28px;
 }
 
 .ofio-bulk-box h2 {
-	margin-top: 0;
-	font-size: 1.1rem;
-	color: var(--ofio-text);
-}
-
-.ofio-warning-banner {
-	background: var(--ofio-error-bg);
-	border-left: 4px solid var(--ofio-error);
-	padding: 10px 14px;
-	margin-bottom: 16px;
-	border-radius: var(--ofio-radius-sm);
-	color: var(--ofio-text);
-	font-weight: 600;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--ofio-text-main);
+    letter-spacing: -0.01em;
+    margin: 0 0 8px 0;
+    padding: 0;
 }
 
 .ofio-description {
-	color: var(--ofio-text-muted);
-	margin-bottom: 20px;
-	max-width: 640px;
+    font-size: 14px;
+    color: var(--ofio-text-muted);
+    margin: 0 0 20px 0;
+    line-height: 1.5;
 }
 
+.ofio-info-banner {
+    background: var(--ofio-success-light);
+    border: 1px solid #86efac;
+    border-radius: 10px;
+    padding: 13px 18px;
+    color: #166534;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.45;
+    margin-bottom: 22px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ofio-warning-banner {
+    background: var(--ofio-amber-light);
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    padding: 13px 18px;
+    color: #92400e;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.45;
+    margin-bottom: 22px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ================= PROGRESS BAR ================= */
 .ofio-progress-wrap {
-	margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 22px 0;
 }
 
 .ofio-progress-bar-container {
-	height: 12px;
-	background: var(--ofio-neutral-bg);
-	border-radius: 100px;
-	overflow: hidden;
-	border: 1px solid var(--ofio-border);
+    flex: 1;
+    height: 12px;
+    background: #e2e8f0;
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
 }
 
 .ofio-progress-bar {
-	height: 100%;
-	background: linear-gradient(90deg, var(--ofio-primary) 0%, #4a90d9 100%);
-	border-radius: 100px;
-	transition: width 0.3s ease;
+    height: 100%;
+    background: linear-gradient(90deg, #2563eb, #38bdf8);
+    border-radius: 20px;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .ofio-progress-text {
-	text-align: right;
-	font-size: 0.8rem;
-	color: var(--ofio-neutral);
-	margin-top: 4px;
-	font-weight: 600;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ofio-text-main);
+    min-width: 48px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
+/* ================= ACTION BUTTONS ================= */
 .ofio-bulk-actions {
-	display: flex;
-	gap: 10px;
-	flex-wrap: wrap;
-	margin-bottom: 14px;
-	align-items: center;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 14px;
 }
 
-.ofio-bulk-actions .button-hero {
-	min-width: 160px;
+#ofio-btn-start,
+.ofio-bulk-actions .button-primary.button-hero {
+    background: var(--ofio-primary) !important;
+    border-color: var(--ofio-primary) !important;
+    color: #ffffff !important;
+    border-radius: 10px !important;
+    padding: 10px 24px !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    line-height: 1.4 !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer;
+}
+
+#ofio-btn-start:hover,
+.ofio-bulk-actions .button-primary.button-hero:hover {
+    background: var(--ofio-primary-hover) !important;
+    border-color: var(--ofio-primary-hover) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
 }
 
 .ofio-btn-stop {
-	color: var(--ofio-error) !important;
-	border-color: var(--ofio-error) !important;
-	background: transparent !important;
+    background: var(--ofio-danger-light) !important;
+    border: 1px solid #fecaca !important;
+    color: #dc2626 !important;
+    border-radius: 10px !important;
+    padding: 10px 20px !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    transition: all 0.2s ease !important;
 }
 
-.ofio-btn-stop:hover,
-.ofio-btn-stop:focus {
-	background: var(--ofio-error) !important;
-	color: #ffffff !important;
+.ofio-btn-stop:hover {
+    background: #fee2e2 !important;
+    border-color: #fca5a5 !important;
+    color: #b91c1c !important;
 }
 
+#ofio-btn-bulk-restore {
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #475569 !important;
+    border-radius: 10px !important;
+    padding: 10px 18px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+}
+
+#ofio-btn-bulk-restore:hover {
+    background: #f1f5f9 !important;
+    color: var(--ofio-text-main) !important;
+    border-color: #94a3b8 !important;
+}
+
+/* ================= INLINE STATS & CONSOLE ================= */
 .ofio-stats-inline {
-	font-size: 0.85rem;
-	color: var(--ofio-text-muted);
-	margin-bottom: 12px;
+    background: #f8fafc;
+    border: 1px solid var(--ofio-border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ofio-text-muted);
+    margin: 20px 0;
 }
 
 .ofio-stats-inline span {
-	font-weight: 600;
-	color: var(--ofio-text);
+    color: var(--ofio-text-main);
+    font-weight: 700;
 }
 
 .ofio-log {
-	background: #1d2327;
-	color: #a7aaad;
-	font-family: monospace;
-	font-size: 0.78rem;
-	border-radius: var(--ofio-radius-sm);
-	padding: 14px 16px;
-	max-height: 280px;
-	overflow-y: auto;
-	margin-top: 14px;
-	scroll-behavior: smooth;
+    background: #090d16;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 18px 20px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #94a3b8;
+    max-height: 240px;
+    overflow-y: auto;
+    margin-top: 20px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .ofio-log-entry {
-	display: flex;
-	gap: 8px;
-	padding: 3px 0;
-	border-bottom: 1px solid rgba(255, 255, 255, .05);
-	line-height: 1.5;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
 }
 
-.ofio-log-entry--success .ofio-log-icon::before { content: '✓'; color: #00a32a; }
-.ofio-log-entry--error   .ofio-log-icon::before { content: '✗'; color: #d63638; }
-.ofio-log-entry--info    .ofio-log-icon::before { content: 'ℹ'; color: #72aee6; }
+.ofio-log-entry--success { color: #34d399; }
+.ofio-log-entry--error { color: #f87171; }
+.ofio-log-entry--info { color: #38bdf8; }
 
-.ofio-log-icon {
-	flex-shrink: 0;
-	width: 16px;
-}
+.ofio-log-entry--success .ofio-log-icon::before { content: "\2713"; font-weight: bold; }
+.ofio-log-entry--info .ofio-log-icon::before { content: "\2139"; font-weight: bold; }
+.ofio-log-entry--error .ofio-log-icon::before { content: "\2717"; font-weight: bold; }
 
-.ofio-log-filename {
-	color: #e0e0e0;
-	flex: 1;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.ofio-log-detail {
-	color: #a7aaad;
-	font-size: 0.74rem;
-	flex-shrink: 0;
-}
-
+/* ================= SETTINGS PAGE & FIELDS ================= */
 .ofio-settings-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-	gap: 20px;
-	margin-bottom: 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 22px;
+    margin-top: 10px;
 }
 
 .ofio-settings-card {
-	background: var(--ofio-card-bg);
-	border: 1px solid var(--ofio-border);
-	border-radius: var(--ofio-radius);
-	box-shadow: var(--ofio-shadow);
-	padding: 24px;
+    background: var(--ofio-card-bg);
+    border: 1px solid var(--ofio-border);
+    border-radius: 16px;
+    padding: 26px;
+    box-shadow: var(--ofio-shadow-sm);
+    overflow: visible !important;
 }
 
 .ofio-settings-card h2 {
-	margin: 0 0 18px;
-	padding-bottom: 12px;
-	border-bottom: 1px solid var(--ofio-neutral-bg);
-	font-size: 0.95rem;
-	color: var(--ofio-text);
+    font-size: 17px;
+    font-weight: 800;
+    padding-bottom: 14px;
+    margin: 0 0 20px 0;
+    border-bottom: 1px solid var(--ofio-border);
+    color: var(--ofio-text-main);
 }
 
 .ofio-field {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	margin-bottom: 20px;
+    margin-bottom: 22px;
+    position: relative;
 }
 
 .ofio-field:last-child {
-	margin-bottom: 0;
+    margin-bottom: 0;
 }
 
 .ofio-field__label {
-	font-weight: 600;
-	font-size: 0.88rem;
-	color: var(--ofio-text);
+    display: flex;
+    align-items: center;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ofio-text-main);
+}
+
+/* ================= MODERN DYNAMIC (i) TOOLTIP ================= */
+.ofio-tooltip {
+    position: relative;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #e0f2fe;
+    color: #0284c7;
+    font-size: 11px;
+    font-weight: 800;
+    margin-left: 8px;
+    border: 1px solid #bae6fd;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    vertical-align: middle;
+}
+
+.ofio-tooltip:hover {
+    background: #0284c7;
+    color: #ffffff;
+    border-color: #0284c7;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+    transform: scale(1.1);
+}
+
+.ofio-tooltip:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 135%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #0f172a;
+    color: #f8fafc;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 11.5px;
+    font-weight: 500;
+    white-space: pre-line;
+    line-height: 1.5;
+    box-shadow: 0 14px 28px -4px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    z-index: 99999;
+    min-width: 200px;
+    text-align: left;
+    pointer-events: none;
+}
+
+.ofio-tooltip:hover::before {
+    content: "";
+    position: absolute;
+    bottom: 120%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #0f172a;
+    z-index: 99999;
+    pointer-events: none;
+}
+
+/* ================= PILL BADGES ================= */
+.ofio-badge {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    border-radius: 20px !important;
+    margin-left: 8px !important;
+    line-height: 1.3 !important;
+    vertical-align: middle;
+}
+
+.ofio-badge--success {
+    background: #dcfce7 !important;
+    color: #15803d !important;
+    border: 1px solid #86efac !important;
+}
+
+.ofio-badge--error {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    border: 1px solid #fca5a5 !important;
+}
+
+.ofio-badge--neutral {
+    background: #f1f5f9 !important;
+    color: #64748b !important;
+    border: 1px solid #cbd5e1 !important;
+}
+
+.ofio-badge--pending {
+    background: #fef9c3 !important;
+    color: #854d0e !important;
+    border: 1px solid #fde047 !important;
+}
+
+/* ================= SLIDERS & SWITCHES ================= */
+.ofio-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 6px;
+    outline: none;
+    margin: 12px 0 6px;
+}
+
+.ofio-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--ofio-primary);
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+    transition: transform 0.15s ease;
+}
+
+.ofio-range::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
 }
 
 .ofio-toggle {
-	display: inline-flex;
-	align-items: center;
-	cursor: pointer;
-	position: relative;
-	margin-bottom: 2px;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
 }
 
-.ofio-toggle input[type="checkbox"] {
-	position: absolute;
-	opacity: 0;
-	width: 0;
-	height: 0;
+.ofio-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
 }
 
 .ofio-toggle__slider {
-	position: relative;
-	display: inline-block;
-	width: 42px;
-	height: 24px;
-	background: var(--ofio-border);
-	border-radius: 100px;
-	transition: background var(--ofio-transition);
-	flex-shrink: 0;
+    position: relative;
+    width: 40px;
+    height: 22px;
+    background: #cbd5e1;
+    border-radius: 20px;
+    transition: 0.25s ease;
+    flex-shrink: 0;
 }
 
-.ofio-toggle__slider::after {
-	content: '';
-	position: absolute;
-	top: 4px;
-	left: 4px;
-	width: 16px;
-	height: 16px;
-	background: #ffffff;
-	border-radius: 50%;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
-	transition: transform var(--ofio-transition);
+.ofio-toggle__slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: #ffffff;
+    border-radius: 50%;
+    transition: 0.25s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
 .ofio-toggle input:checked + .ofio-toggle__slider {
-	background: var(--ofio-primary);
+    background: var(--ofio-primary);
 }
 
-.ofio-toggle input:checked + .ofio-toggle__slider::after {
-	transform: translateX(18px);
+.ofio-toggle input:checked + .ofio-toggle__slider:before {
+    transform: translateX(18px);
 }
 
-.ofio-range {
-	width: 100%;
-	accent-color: var(--ofio-primary);
-}
-
-.ofio-radio {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-size: 0.88rem;
-	cursor: pointer;
-	padding: 4px 0;
-}
-
-.ofio-badge {
-	display: inline-block;
-	padding: 2px 10px;
-	border-radius: 20px;
-	font-size: 0.72rem;
-	font-weight: 600;
-	line-height: 1.7;
-	text-transform: uppercase;
-}
-
-.ofio-badge--success { background: var(--ofio-success-bg); color: var(--ofio-success); }
-.ofio-badge--error   { background: var(--ofio-error-bg);   color: var(--ofio-error); }
-.ofio-badge--pending { background: var(--ofio-neutral-bg); color: var(--ofio-neutral); }
-.ofio-badge--neutral { background: var(--ofio-neutral-bg); color: var(--ofio-neutral); }
-
-.ofio-webp-label {
-	color: var(--ofio-primary);
-	font-weight: 600;
-	font-size: 0.8rem;
-}
-
-.ofio-reoptimize,
-.ofio-restore {
-	margin-top: 4px !important;
-}
-
-.ofio-status-table {
-	background: var(--ofio-card-bg);
-	border: 1px solid var(--ofio-border);
-	border-radius: var(--ofio-radius);
-	box-shadow: var(--ofio-shadow);
-	padding: 28px 32px;
-}
-
-.ofio-status-table h2 {
-	font-size: 1rem;
-	margin: 24px 0 10px;
-	padding-bottom: 8px;
-	border-bottom: 1px solid var(--ofio-neutral-bg);
-	color: var(--ofio-text);
-}
-
-.ofio-status-table h2:first-child {
-	margin-top: 0;
-}
-
-.ofio-spinner {
-	display: inline-block;
-	width: 14px;
-	height: 14px;
-	border: 2px solid rgba(34, 113, 177, 0.2);
-	border-radius: 50%;
-	border-top-color: var(--ofio-primary);
-	animation: ofio-spin 0.6s linear infinite;
-	vertical-align: middle;
-	margin-right: 4px;
-}
-
-@keyframes ofio-spin {
-	to { transform: rotate(360deg); }
+.ofio-toggle input:disabled + .ofio-toggle__slider {
+    background: #e2e8f0;
+    cursor: not-allowed;
+    opacity: 0.6;
 }

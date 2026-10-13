@@ -3,13 +3,17 @@
  * WP-CLI Commands for OptiForge Image Optimizer.
  *
  * Registers top-level sub-commands under `wp ofio`:
+ *   wp ofio stats
+ *   wp ofio queue [status|start|pause|resume|stop]
  *   wp ofio optimize [--all] [--batch-size=N]
  *   wp ofio restore  [--all] [--batch-size=N]
- *   wp ofio stats
  *   wp ofio purge_backups
  *
  * @package OptiForge_Image_Optimizer
  */
+
+// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound
+namespace Optiforge_Image_Optimizer;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -20,23 +24,9 @@ if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
 }
 
 /**
- * Manage image optimization, restore, and statistics for OptiForge Image Optimizer.
- *
- * ## EXAMPLES
- *
- *   wp ofio stats
- *   wp ofio optimize --all
- *   wp ofio optimize --batch-size=20
- *   wp ofio restore --all
- *   wp ofio restore --batch-size=10
- *
- * @package OptiForge_Image_Optimizer
+ * Manage image optimization, background queue, restore, and statistics for OptiForge Image Optimizer.
  */
-class OFIO_CLI {
-
-	// -------------------------------------------------------------------------
-	// wp ofio stats
-	// -------------------------------------------------------------------------
+class CLI {
 
 	/**
 	 * Display a summary of optimization statistics and backup disk usage.
@@ -48,42 +38,112 @@ class OFIO_CLI {
 	 * @subcommand stats
 	 * @alias status
 	 *
-	 * @param array $args       Positional arguments (unused).
-	 * @param array $assoc_args Named arguments (unused).
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Named arguments.
 	 * @return void
 	 */
 	public function stats( array $args, array $assoc_args ): void {
-		$stats_obj   = new OFIO_Stats();
+		$stats_obj   = new Stats();
 		$stats       = $stats_obj->get();
-		$backup_info = ( new OFIO_Backup() )->get_backup_directory_size();
+		$backup_info = ( new Backup() )->get_backup_directory_size();
 
-		WP_CLI::line( '========================================' );
-		WP_CLI::line( '   OptiForge Image Optimizer — Stats    ' );
-		WP_CLI::line( '========================================' );
-		WP_CLI::line( sprintf( 'Total Images:         %d', (int) $stats['total_images'] ) );
-		WP_CLI::line( sprintf( 'Optimized Images:     %d', (int) $stats['optimized_images'] ) );
-		WP_CLI::line( sprintf( 'Unoptimized Images:   %d', $stats_obj->count_unoptimized_images() ) );
-		WP_CLI::line( sprintf( 'Storage Saved:        %.2f MB (%.1f%%)', (float) $stats['saved_mb'], (float) $stats['pct_saved'] ) );
-		WP_CLI::line( sprintf( 'Backup Storage Used:  %s (%d files)', $backup_info['formatted'], $backup_info['count'] ) );
-		WP_CLI::line( '' );
+		\WP_CLI::line( '========================================' );
+		\WP_CLI::line( '   OptiForge Image Optimizer — Stats    ' );
+		\WP_CLI::line( '========================================' );
+		\WP_CLI::line( sprintf( 'Total Images:         %d', (int) $stats['total_images'] ) );
+		\WP_CLI::line( sprintf( 'Optimized Images:     %d', (int) $stats['optimized_images'] ) );
+		\WP_CLI::line( sprintf( 'Unoptimized Images:   %d', $stats_obj->count_unoptimized_images() ) );
+		\WP_CLI::line( sprintf( 'Storage Saved:        %.2f MB (%.1f%%)', (float) $stats['saved_mb'], (float) $stats['pct_saved'] ) );
+		\WP_CLI::line( sprintf( 'Backup Storage Used:  %s (%d files)', $backup_info['formatted'], $backup_info['count'] ) );
+		\WP_CLI::line( '' );
 
-		$engine_obj = new OFIO_Optimizer();
-		WP_CLI::line( sprintf( 'Image Engine:         %s', strtoupper( $engine_obj->get_engine() ) ) );
-		WP_CLI::line( sprintf( 'AVIF Support:         %s', $engine_obj->supports_avif() ? 'Yes' : 'No' ) );
-		WP_CLI::line( sprintf( 'PHP Version:          %s', PHP_VERSION ) );
-		WP_CLI::line( sprintf( 'Memory Limit:         %s', ini_get( 'memory_limit' ) ) );
-		WP_CLI::line( '========================================' );
+		$engine_obj = new Optimizer();
+		\WP_CLI::line( sprintf( 'Image Engine:         %s', strtoupper( $engine_obj->get_engine() ) ) );
+		\WP_CLI::line( sprintf( 'AVIF Support:         %s', $engine_obj->supports_avif() ? 'Yes' : 'No' ) );
+		\WP_CLI::line( sprintf( 'PHP Version:          %s', PHP_VERSION ) );
+		\WP_CLI::line( sprintf( 'Memory Limit:         %s', ini_get( 'memory_limit' ) ) );
+		\WP_CLI::line( '========================================' );
 	}
 
-	// -------------------------------------------------------------------------
-	// wp ofio optimize
-	// -------------------------------------------------------------------------
+	/**
+	 * Manage the background optimization queue.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <action>
+	 * : The queue action to perform. Valid options: status, start, pause, resume, stop.
+	 *
+	 * [--force-all]
+	 * : Used with 'start' to re-optimize already optimized images.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *   wp ofio queue status
+	 *   wp ofio queue start
+	 *   wp ofio queue start --force-all
+	 *   wp ofio queue pause
+	 *   wp ofio queue resume
+	 *   wp ofio queue stop
+	 *
+	 * @subcommand queue
+	 *
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Named arguments.
+	 * @return void
+	 */
+	public function queue( array $args, array $assoc_args ): void {
+		$action    = isset( $args[0] ) ? strtolower( $args[0] ) : 'status';
+		$optimizer = new Optimizer();
+		$backup    = new Backup();
+		$stats     = new Stats();
+		$queue     = new Queue( $optimizer, $backup, $stats );
+
+		switch ( $action ) {
+			case 'status':
+				$state = $queue->get_state();
+				\WP_CLI::line( '========================================' );
+				\WP_CLI::line( '     OptiForge Background Queue         ' );
+				\WP_CLI::line( '========================================' );
+				\WP_CLI::line( sprintf( 'Queue Status:      %s', strtoupper( $state['status'] ) ) );
+				\WP_CLI::line( sprintf( 'Execution Mode:    %s', $state['mode'] ) );
+				\WP_CLI::line( sprintf( 'Current Step:      %s', $state['step'] ) );
+				\WP_CLI::line( sprintf( 'Total Queued:      %d', (int) $state['total'] ) );
+				\WP_CLI::line( sprintf( 'Processed:         %d', (int) $state['processed'] ) );
+				\WP_CLI::line( sprintf( 'Remaining:         %d', (int) $state['remaining'] ) );
+				\WP_CLI::line( sprintf( 'Failed:            %d', (int) $state['failed'] ) );
+				\WP_CLI::line( sprintf( 'Storage Saved:     %s', size_format( (int) $state['saved_bytes'] ) ) );
+				\WP_CLI::line( sprintf( 'Active Task:       %s', $state['current_file'] ) );
+				\WP_CLI::line( '========================================' );
+				break;
+
+			case 'start':
+				$force_all = isset( $assoc_args['force-all'] );
+				$res       = $queue->start_optimization( $force_all );
+				\WP_CLI::success( $res['message'] );
+				break;
+
+			case 'pause':
+				$res = $queue->pause();
+				\WP_CLI::success( $res['message'] );
+				break;
+
+			case 'resume':
+				$res = $queue->resume();
+				\WP_CLI::success( $res['message'] );
+				break;
+
+			case 'stop':
+				$res = $queue->stop();
+				\WP_CLI::success( $res['message'] );
+				break;
+
+			default:
+				\WP_CLI::error( sprintf( 'Unknown queue action: %s. Use status, start, pause, resume, or stop.', $action ) );
+		}
+	}
 
 	/**
-	 * Optimize images in the media library.
-	 *
-	 * By default, optimizes only unoptimized images. Use --all to re-optimize
-	 * every image regardless of existing optimization status.
+	 * Directly optimize images synchronously via CLI.
 	 *
 	 * ## OPTIONS
 	 *
@@ -91,19 +151,17 @@ class OFIO_CLI {
 	 * : Re-optimize every image, including previously optimized ones.
 	 *
 	 * [--batch-size=<number>]
-	 * : Number of images to process. Defaults to all available when --all is
-	 * set, or all unoptimized images otherwise. Set explicitly to limit scope.
+	 * : Number of images to process. Defaults to all unoptimized images.
 	 *
 	 * ## EXAMPLES
 	 *
 	 *   wp ofio optimize
 	 *   wp ofio optimize --all
 	 *   wp ofio optimize --batch-size=50
-	 *   wp ofio optimize --all --batch-size=100
 	 *
 	 * @subcommand optimize
 	 *
-	 * @param array $args       Positional arguments (unused).
+	 * @param array $args       Positional arguments.
 	 * @param array $assoc_args Named arguments.
 	 * @return void
 	 */
@@ -112,20 +170,20 @@ class OFIO_CLI {
 			wp_raise_memory_limit( 'image' );
 		}
 
-		$stats_obj = new OFIO_Stats();
-		$optimizer = new OFIO_Optimizer();
-		$backup    = new OFIO_Backup();
+		$stats_obj = new Stats();
+		$optimizer = new Optimizer();
+		$backup    = new Backup();
 		$optimizer->set_backup( $backup );
 
 		$force_all  = isset( $assoc_args['all'] );
 		$batch_size = isset( $assoc_args['batch-size'] )
 			? max( 1, absint( $assoc_args['batch-size'] ) )
-			: 0; // 0 = no limit.
+			: 0;
 
 		$ids = $stats_obj->get_unoptimized_ids( $batch_size, $force_all );
 
 		if ( empty( $ids ) ) {
-			WP_CLI::success( 'No images found to optimize.' );
+			\WP_CLI::success( 'No images found to optimize.' );
 			return;
 		}
 
@@ -149,12 +207,8 @@ class OFIO_CLI {
 				$saved_total += (int) $result['saved_bytes'];
 			} else {
 				$fail_count++;
-				WP_CLI::warning(
-					sprintf(
-						'Failed [ID %d]: %s',
-						$id,
-						$result['error']
-					)
+				\WP_CLI::warning(
+					sprintf( 'Failed [ID %d]: %s', $id, $result['error'] )
 				);
 			}
 
@@ -167,7 +221,7 @@ class OFIO_CLI {
 
 		$progress->finish();
 
-		WP_CLI::success(
+		\WP_CLI::success(
 			sprintf(
 				'Done. %d optimized, %d failed. Saved: %s.',
 				$success_count,
@@ -176,10 +230,6 @@ class OFIO_CLI {
 			)
 		);
 	}
-
-	// -------------------------------------------------------------------------
-	// wp ofio restore
-	// -------------------------------------------------------------------------
 
 	/**
 	 * Restore images from backup.
@@ -199,28 +249,28 @@ class OFIO_CLI {
 	 *
 	 * @subcommand restore
 	 *
-	 * @param array $args       Positional arguments (unused).
+	 * @param array $args       Positional arguments.
 	 * @param array $assoc_args Named arguments.
 	 * @return void
 	 */
 	public function restore( array $args, array $assoc_args ): void {
-		$backup = new OFIO_Backup();
+		$backup = new Backup();
 		$total  = $backup->count_restorable_images();
 
 		if ( 0 === $total ) {
-			WP_CLI::success( 'No images with backup records found.' );
+			\WP_CLI::success( 'No images with backup records found.' );
 			return;
 		}
 
 		$force_all  = isset( $assoc_args['all'] );
 		$batch_size = isset( $assoc_args['batch-size'] )
 			? max( 1, absint( $assoc_args['batch-size'] ) )
-			: 0; // 0 = all.
+			: 0;
 
 		if ( $force_all ) {
-			WP_CLI::confirm(
+			\WP_CLI::confirm(
 				sprintf(
-					'About to restore %d image(s) to their originals. All current optimizations will be lost. Continue?',
+					'About to restore %d image(s) to their originals. All optimizations will be reverted. Continue?',
 					$total
 				)
 			);
@@ -229,7 +279,7 @@ class OFIO_CLI {
 		$ids = $backup->get_restorable_ids( $batch_size );
 
 		if ( empty( $ids ) ) {
-			WP_CLI::success( 'No restorable images found.' );
+			\WP_CLI::success( 'No restorable images found.' );
 			return;
 		}
 
@@ -250,12 +300,8 @@ class OFIO_CLI {
 				$success_count++;
 			} else {
 				$fail_count++;
-				WP_CLI::warning(
-					sprintf(
-						'Failed to restore [ID %d]: %s',
-						$id,
-						$result['message']
-					)
+				\WP_CLI::warning(
+					sprintf( 'Failed to restore [ID %d]: %s', $id, $result['message'] )
 				);
 			}
 
@@ -268,7 +314,7 @@ class OFIO_CLI {
 
 		$progress->finish();
 
-		WP_CLI::success(
+		\WP_CLI::success(
 			sprintf(
 				'Done. %d restored, %d failed.',
 				$success_count,
@@ -276,10 +322,6 @@ class OFIO_CLI {
 			)
 		);
 	}
-
-	// -------------------------------------------------------------------------
-	// wp ofio purge_backups
-	// -------------------------------------------------------------------------
 
 	/**
 	 * Delete all backup files from disk and remove all backup postmeta records.
@@ -290,13 +332,24 @@ class OFIO_CLI {
 	 *
 	 * @subcommand purge_backups
 	 *
-	 * @param array $args       Positional arguments (unused).
-	 * @param array $assoc_args Named arguments (unused).
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Named arguments.
 	 * @return void
 	 */
 	public function purge_backups( array $args, array $assoc_args ): void {
-		WP_CLI::confirm( 'Are you sure you want to permanently delete ALL original image backups? This cannot be undone.' );
-		$result = ( new OFIO_Backup() )->purge_all_backups();
-		WP_CLI::success( $result['message'] );
+		\WP_CLI::confirm( 'Are you sure you want to permanently delete ALL original image backups? This cannot be undone.' );
+		$result = ( new Backup() )->purge_all_backups();
+		\WP_CLI::success( $result['message'] );
 	}
+}
+
+// Backwards-compatible class aliases.
+if ( ! class_exists( 'OFIO_CLI', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\CLI', 'OFIO_CLI' );
+}
+if ( ! class_exists( '\OptiForge\ImageOptimizer\CLI', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\CLI', '\OptiForge\ImageOptimizer\CLI' );
+}
+if ( ! class_exists( '\OptiForge_Image_Optimizer\CLI', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\CLI', '\OptiForge_Image_Optimizer\CLI' );
 }

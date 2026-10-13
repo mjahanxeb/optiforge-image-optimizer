@@ -9,64 +9,53 @@
  * @package OptiForge_Image_Optimizer
  */
 
+// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound
+namespace Optiforge_Image_Optimizer;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * Class OFIO_Custom_Folders
+ * Class CustomFolders
  */
-class OFIO_Custom_Folders {
+class CustomFolders {
 
 	/**
-	 * Shared optimizer instance injected by OFIO_Core.
+	 * Shared optimizer instance.
 	 *
-	 * @var OFIO_Optimizer
+	 * @var Optimizer
 	 */
-	private OFIO_Optimizer $optimizer;
+	private Optimizer $optimizer;
 
 	/**
-	 * Allowed root paths for scanning.
-	 *
-	 * Directories outside this list are rejected by the traversal guard.
+	 * Whitelist of allowed root paths for scanning.
 	 *
 	 * @var string[]
 	 */
 	private array $allowed_roots;
 
-	// -------------------------------------------------------------------------
-	// Constructor
-	// -------------------------------------------------------------------------
-
 	/**
-	 * OFIO_Custom_Folders constructor.
+	 * CustomFolders constructor.
 	 *
-	 * @param OFIO_Optimizer $optimizer Shared optimizer instance.
+	 * @param Optimizer $optimizer Shared optimizer.
 	 */
-	public function __construct( OFIO_Optimizer $optimizer ) {
+	public function __construct( Optimizer $optimizer ) {
 		$this->optimizer = $optimizer;
 
-		// Build whitelist of allowed root paths.
 		$this->allowed_roots = array(
-			realpath( WP_CONTENT_DIR )             ?: WP_CONTENT_DIR,
+			realpath( WP_CONTENT_DIR ) ?: WP_CONTENT_DIR,
 			realpath( get_stylesheet_directory() ) ?: get_stylesheet_directory(),
-			realpath( get_template_directory() )   ?: get_template_directory(),
-			realpath( wp_upload_dir()['basedir'] )  ?: wp_upload_dir()['basedir'],
+			realpath( get_template_directory() ) ?: get_template_directory(),
+			realpath( wp_upload_dir()['basedir'] ) ?: wp_upload_dir()['basedir'],
 		);
 		$this->allowed_roots = array_unique( array_filter( $this->allowed_roots ) );
 
 		add_action( 'wp_ajax_ofio_optimize_custom_folder', array( $this, 'ajax_optimize_custom_folder' ) );
 	}
 
-	// -------------------------------------------------------------------------
-	// Folder Registry
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Return the list of scannable folder definitions.
-	 *
-	 * Plugins or themes can extend this list via the `ofio_scannable_folders`
-	 * filter.
+	 * Get list of scannable folder definitions.
 	 *
 	 * @return array<string, array{label:string, path:string}>
 	 */
@@ -78,27 +67,14 @@ class OFIO_Custom_Folders {
 			),
 		);
 
-		/**
-		 * Filter: allow third-party code to register additional scannable
-		 * folders (e.g. a custom uploads sub-directory).
-		 *
-		 * @param array $folders Associative array of folder definitions.
-		 */
 		return (array) apply_filters( 'ofio_scannable_folders', $folders );
 	}
 
-	// -------------------------------------------------------------------------
-	// Directory Scanning
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Recursively scan a directory for optimizable image files.
+	 * Recursively scan directory for optimizable images with traversal guard.
 	 *
-	 * Path traversal guard: rejects any directory whose realpath does not start
-	 * with one of the allowed root paths.
-	 *
-	 * @param string $dir Absolute path to the directory to scan.
-	 * @return string[] Absolute paths of discovered image files.
+	 * @param string $dir Path.
+	 * @return string[]
 	 */
 	public static function scan_folder_images( string $dir ): array {
 		$images = array();
@@ -107,18 +83,16 @@ class OFIO_Custom_Folders {
 			return $images;
 		}
 
-		// Path traversal guard.
 		$real_dir = realpath( $dir );
 		if ( false === $real_dir ) {
 			return $images;
 		}
 
-		// Build allowed roots from static context — use WP_CONTENT_DIR as baseline.
 		$allowed = array(
-			realpath( WP_CONTENT_DIR )             ?: WP_CONTENT_DIR,
+			realpath( WP_CONTENT_DIR ) ?: WP_CONTENT_DIR,
 			realpath( get_stylesheet_directory() ) ?: get_stylesheet_directory(),
-			realpath( get_template_directory() )   ?: get_template_directory(),
-			realpath( wp_upload_dir()['basedir'] )  ?: wp_upload_dir()['basedir'],
+			realpath( get_template_directory() ) ?: get_template_directory(),
+			realpath( wp_upload_dir()['basedir'] ) ?: wp_upload_dir()['basedir'],
 		);
 		$allowed = array_unique( array_filter( $allowed ) );
 
@@ -135,42 +109,35 @@ class OFIO_Custom_Folders {
 		}
 
 		try {
-			$iterator = new RecursiveIteratorIterator(
-				new RecursiveDirectoryIterator( $real_dir, RecursiveDirectoryIterator::SKIP_DOTS ),
-				RecursiveIteratorIterator::LEAVES_ONLY
+			$iterator = new \RecursiveIteratorIterator(
+				new \RecursiveDirectoryIterator( $real_dir, \RecursiveDirectoryIterator::SKIP_DOTS ),
+				\RecursiveIteratorIterator::LEAVES_ONLY
 			);
 
 			foreach ( $iterator as $file ) {
-				/** @var SplFileInfo $file */
+				/** @var \SplFileInfo $file */
 				if ( ! $file->isFile() || ! $file->isReadable() ) {
 					continue;
 				}
 				$ext = strtolower( $file->getExtension() );
-				if ( in_array( $ext, array( 'jpg', 'jpeg', 'png', 'webp' ), true ) ) {
+				if ( in_array( $ext, array( 'jpg', 'jpeg', 'png', 'webp', 'gif' ), true ) ) {
 					$images[] = $file->getPathname();
 				}
 			}
 		} catch ( \Exception $e ) {
-			error_log( '[OFIO] scan_folder_images error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			// Fail-safe: Skip unreadable folders.
 		}
 
 		return $images;
 	}
 
-	// -------------------------------------------------------------------------
-	// External File Optimization
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Optimize a single image file that is NOT a WordPress attachment.
+	 * Optimize an external file outside uploads directory.
 	 *
-	 * Applies path traversal guard before processing.
-	 *
-	 * @param string $path Absolute path to the image file.
-	 * @return array Optimization result array (same shape as process_file()).
+	 * @param string $path Path.
+	 * @return array
 	 */
 	public function optimize_external_file( string $path ): array {
-		// Traversal guard.
 		$real_path = realpath( $path );
 		if ( false === $real_path ) {
 			return array(
@@ -190,7 +157,7 @@ class OFIO_Custom_Folders {
 		if ( ! $is_allowed ) {
 			return array(
 				'success' => false,
-				'error'   => __( 'Path is outside the allowed directory list.', 'optiforge-image-optimizer' ),
+				'error'   => __( 'Path is outside allowed directories.', 'optiforge-image-optimizer' ),
 			);
 		}
 
@@ -202,16 +169,8 @@ class OFIO_Custom_Folders {
 		return $this->optimizer->process_file( $real_path, $quality, $mode, $webp_enabled, $avif_enabled );
 	}
 
-	// -------------------------------------------------------------------------
-	// AJAX Handler
-	// -------------------------------------------------------------------------
-
 	/**
-	 * AJAX handler: optimize all images in a registered custom folder.
-	 *
-	 * Expects POST fields:
-	 *   security  (nonce)
-	 *   folder_key (string — key from get_scannable_folders())
+	 * AJAX: Optimize images in registered custom folder.
 	 *
 	 * @return void
 	 */
@@ -219,10 +178,7 @@ class OFIO_Custom_Folders {
 		check_ajax_referer( 'ofio_nonce', 'security' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error(
-				array( 'message' => __( 'Insufficient permissions.', 'optiforge-image-optimizer' ) ),
-				403
-			);
+			wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'optiforge-image-optimizer' ) ), 403 );
 			return;
 		}
 
@@ -230,9 +186,7 @@ class OFIO_Custom_Folders {
 		$folders    = self::get_scannable_folders();
 
 		if ( ! isset( $folders[ $folder_key ] ) ) {
-			wp_send_json_error(
-				array( 'message' => __( 'Unknown folder key.', 'optiforge-image-optimizer' ) )
-			);
+			wp_send_json_error( array( 'message' => __( 'Unknown folder key.', 'optiforge-image-optimizer' ) ) );
 			return;
 		}
 
@@ -257,7 +211,7 @@ class OFIO_Custom_Folders {
 		$errors      = array();
 
 		foreach ( $images as $image_path ) {
-			if ( ! empty( $errors ) && ( microtime( true ) - $start_time ) >= $time_budget ) {
+			if ( ( microtime( true ) - $start_time ) >= $time_budget ) {
 				break;
 			}
 
@@ -265,7 +219,7 @@ class OFIO_Custom_Folders {
 
 			if ( ! empty( $result['success'] ) ) {
 				$processed++;
-				$saved_bytes += (int) ( $result['saved_bytes'] ?? max( 0, (int) ( $result['original_size'] ?? 0 ) - (int) ( $result['new_size'] ?? 0 ) ) );
+				$saved_bytes += (int) ( $result['saved_bytes'] ?? 0 );
 			} else {
 				$errors[] = basename( $image_path ) . ': ' . ( $result['error'] ?? 'unknown error' );
 			}
@@ -282,7 +236,7 @@ class OFIO_Custom_Folders {
 				'saved_kb'    => round( $saved_bytes / 1024, 1 ),
 				'errors'      => $errors,
 				'message'     => sprintf(
-					/* translators: 1: number of images processed, 2: bytes saved */
+					/* translators: 1: processed, 2: bytes saved */
 					__( 'Processed %1$d images. Saved %2$s.', 'optiforge-image-optimizer' ),
 					$processed,
 					size_format( $saved_bytes )
@@ -290,4 +244,15 @@ class OFIO_Custom_Folders {
 			)
 		);
 	}
+}
+
+// Backwards-compatible class aliases.
+if ( ! class_exists( 'OFIO_Custom_Folders', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\CustomFolders', 'OFIO_Custom_Folders' );
+}
+if ( ! class_exists( '\OptiForge\ImageOptimizer\CustomFolders', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\CustomFolders', '\OptiForge\ImageOptimizer\CustomFolders' );
+}
+if ( ! class_exists( '\OptiForge_Image_Optimizer\CustomFolders', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\CustomFolders', '\OptiForge_Image_Optimizer\CustomFolders' );
 }

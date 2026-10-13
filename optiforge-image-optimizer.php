@@ -2,10 +2,10 @@
 /**
  * Plugin Name:       OptiForge Image Optimizer
  * Plugin URI:        https://github.com/mjahanxeb/optiforge-image-optimizer
- * Description:       Enterprise-grade image optimization: AVIF/WebP generation, Max dimension resizing, Time-budgeted bulk optimizer, One-click bulk restore, Live media inline optimization, and WP-CLI commands.
- * Version:           1.3.1
+ * Description:       Enterprise-grade background image optimization: Browser-independent queue processing, AVIF/WebP generation, Max dimension resizing, One-click bulk restore, Live media inline optimization, and WP-CLI commands.
+ * Version:           1.4.0
  * Requires at least: 5.8
- * Requires PHP:      7.4
+ * Requires PHP:      8.1
  * Author:            Muhammad Jahanzaib
  * Author URI:        https://github.com/mjahanxeb
  * License:           GPL-2.0+
@@ -54,22 +54,22 @@ function ofio_deactivate_with_notice( string $message ): void {
 	);
 }
 
-// PHP version check.
-if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
+// PHP version check (PHP 8.1+ required).
+if ( version_compare( PHP_VERSION, '8.1', '<' ) ) {
 	ofio_deactivate_with_notice(
 		sprintf(
 			/* translators: 1: current PHP version, 2: required PHP version */
 			__( 'Your server is running PHP %1$s. OptiForge Image Optimizer requires PHP %2$s or higher. Please upgrade PHP or contact your host.', 'optiforge-image-optimizer' ),
 			PHP_VERSION,
-			'7.4'
+			'8.1'
 		)
 	);
 	return;
 }
 
-// WordPress version check.
+// WordPress version check (WP 5.8+ required).
 global $wp_version;
-if ( version_compare( $wp_version, '5.8', '<' ) ) {
+if ( isset( $wp_version ) && version_compare( $wp_version, '5.8', '<' ) ) {
 	ofio_deactivate_with_notice(
 		sprintf(
 			/* translators: 1: current WP version, 2: required WP version */
@@ -85,11 +85,12 @@ if ( version_compare( $wp_version, '5.8', '<' ) ) {
 // 2. Constants.
 // ---------------------------------------------------------------------------
 
-define( 'OFIO_VERSION',  '1.3.1' );
-define( 'OFIO_PATH',     plugin_dir_path( __FILE__ ) );
-define( 'OFIO_URL',      plugin_dir_url( __FILE__ ) );
-define( 'OFIO_BASENAME', plugin_basename( __FILE__ ) );
-define( 'OFIO_INCLUDES', OFIO_PATH . 'includes/' );
+define( 'OFIO_VERSION',         '1.4.0' );
+define( 'OFIO_PATH',            plugin_dir_path( __FILE__ ) );
+define( 'OFIO_URL',             plugin_dir_url( __FILE__ ) );
+define( 'OFIO_BASENAME',        plugin_basename( __FILE__ ) );
+define( 'OFIO_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+define( 'OFIO_INCLUDES',        OFIO_PATH . 'includes/' );
 
 /**
  * Maximum file size (bytes) that will be loaded into GD/Imagick.
@@ -101,36 +102,53 @@ if ( ! defined( 'OFIO_MAX_FILE_BYTES' ) ) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Hardened PSR-4-style Autoloader.
+// 3. Dual PSR-4 & Legacy Autoloader.
 // ---------------------------------------------------------------------------
 
 spl_autoload_register(
 	static function ( string $class_name ): void {
-		// Only handle OFIO_ prefixed classes.
-		if ( 0 !== strpos( $class_name, 'OFIO_' ) ) {
+		$class_name = ltrim( $class_name, '\\' );
+		$file       = '';
+
+		// 1. Handle Optiforge_Image_Optimizer / OptiForge_Image_Optimizer namespace.
+		if ( 0 === stripos( $class_name, 'Optiforge_Image_Optimizer\\' ) ) {
+			$relative = substr( $class_name, strlen( 'Optiforge_Image_Optimizer\\' ) );
+			$slug     = ( 'cli' === strtolower( $relative ) )
+				? 'cli'
+				: strtolower( (string) preg_replace( '/(?<!^)[A-Z]/', '-$0', $relative ) );
+			$file     = OFIO_INCLUDES . 'class-' . $slug . '.php';
+		}
+		// 2. Handle legacy OptiForge\ImageOptimizer namespace.
+		elseif ( 0 === stripos( $class_name, 'OptiForge\\ImageOptimizer\\' ) ) {
+			$relative = substr( $class_name, strlen( 'OptiForge\\ImageOptimizer\\' ) );
+			$slug     = ( 'cli' === strtolower( $relative ) )
+				? 'cli'
+				: strtolower( (string) preg_replace( '/(?<!^)[A-Z]/', '-$0', $relative ) );
+			$file     = OFIO_INCLUDES . 'class-' . $slug . '.php';
+		}
+		// 3. Handle legacy OFIO_ prefix.
+		elseif ( 0 === strpos( $class_name, 'OFIO_' ) ) {
+			if ( ! preg_match( '/^OFIO_[A-Za-z0-9_]+$/', $class_name ) ) {
+				return;
+			}
+			$slug = strtolower(
+				str_replace(
+					array( 'OFIO_', '_' ),
+					array( '',      '-' ),
+					$class_name
+				)
+			);
+			$file = OFIO_INCLUDES . 'class-' . $slug . '.php';
+		} else {
 			return;
 		}
 
-		// Validate class name: only word chars allowed after prefix.
-		if ( ! preg_match( '/^OFIO_[A-Za-z0-9_]+$/', $class_name ) ) {
+		if ( empty( $file ) ) {
 			return;
 		}
-
-		// Build expected filename: OFIO_Custom_Folders → class-custom-folders.php
-		$slug = strtolower(
-			str_replace(
-				array( 'OFIO_', '_' ),
-				array( '',      '-' ),
-				$class_name
-			)
-		);
-
-		$file = OFIO_INCLUDES . 'class-' . $slug . '.php';
 
 		/*
 		 * Prevent path-traversal on case-sensitive Linux file systems.
-		 * realpath() returns false if the file does not exist, so we
-		 * check that the resolved path is strictly inside OFIO_INCLUDES.
 		 */
 		$real_includes = realpath( OFIO_INCLUDES );
 		$real_file     = realpath( $file );
@@ -154,7 +172,7 @@ spl_autoload_register(
 register_activation_hook( __FILE__, 'ofio_activate' );
 
 /**
- * Plugin activation: seed default options, create backup directory, schedule cron.
+ * Plugin activation: seed default options, create backup directory, create queue table, schedule cron.
  *
  * @return void
  */
@@ -215,6 +233,16 @@ function ofio_activate(): void {
 		file_put_contents( $backup_dir . '/index.php', '<?php // Silence is golden.' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 	}
 
+	// Create queue database table.
+	if ( class_exists( 'Optiforge_Image_Optimizer\Queue' ) ) {
+		$optimizer = new \Optiforge_Image_Optimizer\Optimizer();
+		$backup    = new \Optiforge_Image_Optimizer\Backup();
+		$stats     = new \Optiforge_Image_Optimizer\Stats();
+		$queue     = new \Optiforge_Image_Optimizer\Queue( $optimizer, $backup, $stats );
+		$queue->maybe_create_table();
+	}
+
+	// Schedule hourly optimization cron.
 	if ( ! wp_next_scheduled( 'ofio_scheduled_optimization' ) ) {
 		wp_schedule_event( time(), 'hourly', 'ofio_scheduled_optimization' );
 	}
@@ -232,8 +260,17 @@ function ofio_deactivate(): void {
 	if ( $timestamp ) {
 		wp_unschedule_event( $timestamp, 'ofio_scheduled_optimization' );
 	}
+
+	$watchdog_timestamp = wp_next_scheduled( 'ofio_queue_watchdog' );
+	if ( $watchdog_timestamp ) {
+		wp_unschedule_event( $watchdog_timestamp, 'ofio_queue_watchdog' );
+	}
+
 	delete_transient( 'ofio_stats_cache' );
 	delete_transient( 'ofio_unoptimized_ids' );
+	delete_transient( 'ofio_queue_lock' );
+	delete_transient( 'ofio_queue_token' );
+	delete_transient( 'ofio_queue_recent_log' );
 }
 
 // ---------------------------------------------------------------------------
@@ -244,15 +281,13 @@ add_action( 'plugins_loaded', 'ofio_init' );
 
 /**
  * Initialize plugin after all plugins are loaded.
- * Note: load_plugin_textdomain() is intentionally omitted — WordPress 4.6+
- * automatically loads translations from the /languages directory.
  *
  * @return void
  */
 function ofio_init(): void {
-	OFIO_Core::get_instance();
+	\Optiforge_Image_Optimizer\Core::get_instance();
 
 	if ( defined( 'WP_CLI' ) && WP_CLI ) {
-		WP_CLI::add_command( 'ofio', 'OFIO_CLI' );
+		\WP_CLI::add_command( 'ofio', '\Optiforge_Image_Optimizer\CLI' );
 	}
 }

@@ -1,22 +1,24 @@
 <?php
 /**
- * Backup Engine.
+ * Non-Destructive Backup & Restoration Engine.
  *
- * Manages physical backup files in the `ofio-backups/` directory, restore
- * operations, orphan file cleanup, and attachment-deletion hooks. Includes
- * full protection against infinite restore loops and stale postmeta lockouts.
+ * Manages pristine original backups in `ofio-backups/`, individual and bulk
+ * restore operations, orphan file cleanup, and attachment deletion hooks.
  *
  * @package OptiForge_Image_Optimizer
  */
+
+// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound
+namespace Optiforge_Image_Optimizer;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * Class OFIO_Backup
+ * Class Backup
  */
-class OFIO_Backup {
+class Backup {
 
 	/**
 	 * Absolute path to the backup directory.
@@ -27,29 +29,20 @@ class OFIO_Backup {
 
 	/**
 	 * Flag set to true while a restore is in progress to prevent auto-optimize
-	 * from firing on the regenerated metadata (which would overwrite the
-	 * restored original again).
+	 * from firing on the regenerated metadata.
 	 *
 	 * @var bool
 	 */
 	public static bool $is_restoring = false;
 
-	// -------------------------------------------------------------------------
-	// Constructor
-	// -------------------------------------------------------------------------
-
 	/**
-	 * OFIO_Backup constructor.
+	 * Backup constructor.
 	 */
 	public function __construct() {
 		$upload_dir       = wp_upload_dir();
 		$this->backup_dir = trailingslashit( $upload_dir['basedir'] ) . 'ofio-backups';
 		$this->maybe_create_dir();
 	}
-
-	// -------------------------------------------------------------------------
-	// Backup Directory Bootstrapping
-	// -------------------------------------------------------------------------
 
 	/**
 	 * Ensure the backup directory exists and is protected from direct web access.
@@ -73,15 +66,8 @@ class OFIO_Backup {
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// Backup Creation
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Create a backup copy of an attachment's main file.
-	 *
-	 * Skips silently if a backup already exists (idempotent). Records the
-	 * backup path in `_ofio_backup_path` postmeta on success.
+	 * Create a backup copy of an attachment's main file before any modification.
 	 *
 	 * @param string $file_path     Absolute path to source file.
 	 * @param int    $attachment_id Attachment post ID.
@@ -94,7 +80,7 @@ class OFIO_Backup {
 
 		$backup_path = $this->get_backup_path( $attachment_id, $file_path );
 
-		// Already backed up — do not overwrite an existing original.
+		// Do not overwrite an existing pristine backup.
 		if ( file_exists( $backup_path ) ) {
 			return true;
 		}
@@ -106,20 +92,8 @@ class OFIO_Backup {
 		return $ok;
 	}
 
-	// -------------------------------------------------------------------------
-	// Restore
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Restore an attachment from its backup file.
-	 *
-	 * FIX (CRITICAL INFINITE LOOP): Deletes `_ofio_backup_path` postmeta
-	 * on every code-path (success AND missing-file stale-meta) so that
-	 * get_restorable_ids() never returns the same ID twice.
-	 *
-	 * FIX (MISSING FILE / STALE META LOCKOUT): When the physical backup is
-	 * absent but postmeta exists, clean up the stale meta, log, and return a
-	 * graceful failure so the queue moves on.
+	 * Restore an attachment from its backup file to pristine original.
 	 *
 	 * @param int $attachment_id Attachment post ID.
 	 * @return array{success:bool, message:string}
@@ -134,17 +108,8 @@ class OFIO_Backup {
 			);
 		}
 
-		// FIX: Physical file missing but postmeta remains → stale lockout.
 		if ( ! file_exists( (string) $backup_path ) ) {
-			// Clean up the stale postmeta so the queue does not freeze.
 			delete_post_meta( $attachment_id, '_ofio_backup_path' );
-			error_log( // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				sprintf(
-					'[OFIO] Backup file missing for attachment %d — path: %s. Postmeta cleaned.',
-					$attachment_id,
-					$backup_path
-				)
-			);
 			return array(
 				'success' => false,
 				'message' => __( 'Backup file not found on disk. Record cleaned.', 'optiforge-image-optimizer' ),
@@ -160,44 +125,44 @@ class OFIO_Backup {
 			);
 		}
 
-		// Replace optimized main image with original.
+		// Replace current file with backup.
 		if ( ! copy( (string) $backup_path, $file ) ) {
 			return array(
 				'success' => false,
-				'message' => __( 'Could not overwrite optimized file with backup.', 'optiforge-image-optimizer' ),
+				'message' => __( 'Could not overwrite file with backup copy.', 'optiforge-image-optimizer' ),
 			);
 		}
 
-		// Delete physical backup file after successful restoration.
+		// Delete individual backup file after successful restore.
 		wp_delete_file( (string) $backup_path );
-
-		// Clean up the postmeta unconditionally so get_restorable_ids() drops this ID.
 		delete_post_meta( $attachment_id, '_ofio_backup_path' );
 
-		// Clean up generated sidecar files.
+		// Clean up generated sidecars and optimization meta.
 		$this->delete_sidecar_files( $attachment_id );
-
-		// Remove optimization metadata from attachment.
 		delete_post_meta( $attachment_id, '_ofio_meta' );
 
-		// Regenerate thumbnails from restored original without re-optimizing.
+		wp_cache_delete( 'ofio_count_restorable', 'ofio' );
+
+		// Regenerate responsive sizes without triggering re-optimization.
 		self::$is_restoring = true;
 		try {
-			if ( ! function_exists( 'wp_generate_attachment_metadata' ) ) {
+			if ( ! function_exists( 'wp_generate_attachment_metadata' ) && file_exists( ABSPATH . 'wp-admin/includes/image.php' ) ) {
 				require_once ABSPATH . 'wp-admin/includes/image.php';
 			}
-			$metadata = wp_generate_attachment_metadata( $attachment_id, $file );
-			wp_update_attachment_metadata( $attachment_id, $metadata );
+			if ( function_exists( 'wp_generate_attachment_metadata' ) ) {
+				$metadata = wp_generate_attachment_metadata( $attachment_id, $file );
+				wp_update_attachment_metadata( $attachment_id, $metadata );
+			}
 		} finally {
 			self::$is_restoring = false;
 		}
 
-		// Update global statistics and bust cache.
-		$stats = new OFIO_Stats();
+		$stats = new Stats();
 		$stats->record_restore( $attachment_id );
 
-		if ( class_exists( 'OFIO_Cache' ) ) {
-			OFIO_Cache::purge_all();
+		if ( class_exists( '\OFIO_Cache' ) ) {
+			\OFIO_Cache::purge_all();
+			\OFIO_Cache::purge_attachment( $attachment_id );
 		}
 
 		return array(
@@ -206,14 +171,8 @@ class OFIO_Backup {
 		);
 	}
 
-	// -------------------------------------------------------------------------
-	// Attachment Deletion Hook
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Clean up backup file and sidecars when an attachment is permanently deleted.
-	 *
-	 * Hooked to `delete_attachment`.
+	 * Hooked to delete_attachment: clean up backup file and sidecars when media item is deleted.
 	 *
 	 * @param int $attachment_id Attachment post ID being deleted.
 	 * @return void
@@ -225,19 +184,11 @@ class OFIO_Backup {
 		}
 
 		$this->delete_sidecar_files( $attachment_id );
-
-		// Clean up restorable-IDs cache.
 		wp_cache_delete( 'ofio_count_restorable', 'ofio' );
 	}
 
-	// -------------------------------------------------------------------------
-	// Sidecar Cleanup
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Delete all .webp and .avif sidecar files associated with an attachment.
-	 *
-	 * Cleans sidecars for both the main original file and all generated thumbnail sizes.
+	 * Delete all .webp and .avif sidecars for master image and all thumbnail sizes.
 	 *
 	 * @param int $attachment_id Attachment post ID.
 	 * @return void
@@ -248,10 +199,8 @@ class OFIO_Backup {
 			return;
 		}
 
-		// Delete main file sidecars.
 		$this->unlink_sidecars_for_path( $file );
 
-		// Delete thumbnail sidecars.
 		$metadata = wp_get_attachment_metadata( $attachment_id );
 		if ( empty( $metadata['sizes'] ) || ! is_array( $metadata['sizes'] ) ) {
 			return;
@@ -272,23 +221,20 @@ class OFIO_Backup {
 	}
 
 	/**
-	 * Delete .webp and .avif sidecars for a single source file path.
-	 * Handles both appended ($path . '.webp') and replaced-extension formats.
+	 * Unlink sidecars for a given source path.
 	 *
-	 * @param string $source_path Absolute path to the source image.
+	 * @param string $source_path File path.
 	 * @return void
 	 */
 	private function unlink_sidecars_for_path( string $source_path ): void {
 		$info = pathinfo( $source_path );
 
 		foreach ( array( 'webp', 'avif' ) as $ext ) {
-			// Nginx sidecar format ($path . '.webp' / $path . '.avif')
 			$sidecar_appended = $source_path . '.' . $ext;
 			if ( file_exists( $sidecar_appended ) ) {
 				wp_delete_file( $sidecar_appended );
 			}
 
-			// Replaced extension format
 			$sidecar_replaced = $info['dirname'] . DIRECTORY_SEPARATOR . $info['filename'] . '.' . $ext;
 			if ( $sidecar_replaced !== $source_path && file_exists( $sidecar_replaced ) ) {
 				wp_delete_file( $sidecar_replaced );
@@ -296,78 +242,66 @@ class OFIO_Backup {
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// Query Methods
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Count attachments that have an active backup record.
+	 * Count restorable images in the database.
 	 *
 	 * @return int
 	 */
 	public function count_restorable_images(): int {
 		global $wpdb;
+		wp_cache_delete( 'ofio_count_restorable', 'ofio' );
 
-		$cache_key = 'ofio_count_restorable';
-		$cached    = wp_cache_get( $cache_key, 'ofio' );
-		if ( false !== $cached ) {
-			return (int) $cached;
-		}
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$count = $wpdb->get_var(
-			"SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta}
-			 WHERE meta_key = '_ofio_backup_path'"
+			$wpdb->prepare(
+				"SELECT COUNT(DISTINCT post_id) FROM {$wpdb->postmeta} WHERE meta_key = %s",
+				'_ofio_backup_path'
+			)
 		);
 
-		wp_cache_set( $cache_key, (int) $count, 'ofio', 60 );
 		return (int) $count;
 	}
 
 	/**
-	 * Retrieve attachment IDs that have a backup postmeta record.
+	 * Retrieve attachment IDs with backup records.
 	 *
-	 * @param int $limit Maximum number of IDs to return (0 = unlimited).
+	 * @param int $limit Maximum IDs to fetch.
 	 * @return int[]
 	 */
 	public function get_restorable_ids( int $limit = 500 ): array {
 		global $wpdb;
 
-		$cache_key = 'ofio_restorable_ids_' . $limit;
-		$cached    = wp_cache_get( $cache_key, 'ofio' );
-		if ( false !== $cached ) {
-			return (array) $cached;
-		}
-
 		if ( $limit > 0 ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$ids = $wpdb->get_col(
 				$wpdb->prepare(
 					"SELECT DISTINCT post_id FROM {$wpdb->postmeta}
-					 WHERE meta_key = '_ofio_backup_path'
+					 WHERE meta_key = %s
 					 ORDER BY post_id DESC
 					 LIMIT %d",
+					'_ofio_backup_path',
 					$limit
 				)
 			);
 		} else {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$ids = $wpdb->get_col(
-				"SELECT DISTINCT post_id FROM {$wpdb->postmeta}
-				 WHERE meta_key = '_ofio_backup_path'
-				 ORDER BY post_id DESC"
+				$wpdb->prepare(
+					"SELECT DISTINCT post_id FROM {$wpdb->postmeta}
+					 WHERE meta_key = %s
+					 ORDER BY post_id DESC",
+					'_ofio_backup_path'
+				)
 			);
 		}
 
-		$ids = array_map( 'absint', (array) $ids );
-		wp_cache_set( $cache_key, $ids, 'ofio', 30 );
-		return $ids;
+		return array_map( 'absint', (array) $ids );
 	}
 
 	/**
 	 * Check whether a physical backup file exists for an attachment.
 	 *
-	 * @param int $attachment_id Attachment post ID.
+	 * @param int $attachment_id Attachment ID.
 	 * @return bool
 	 */
 	public function has_backup( int $attachment_id ): bool {
@@ -375,12 +309,8 @@ class OFIO_Backup {
 		return ! empty( $path ) && file_exists( (string) $path );
 	}
 
-	// -------------------------------------------------------------------------
-	// Directory Utilities
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Calculate the total size and file count of the backup directory.
+	 * Get total size and count of the backup directory.
 	 *
 	 * @return array{count:int, size:int, formatted:string}
 	 */
@@ -412,7 +342,7 @@ class OFIO_Backup {
 	}
 
 	/**
-	 * Permanently delete all backup files from disk and remove all postmeta records.
+	 * Permanently delete all backup files from disk and remove all backup postmeta records.
 	 *
 	 * @return array{success:bool, deleted:int, message:string}
 	 */
@@ -437,37 +367,46 @@ class OFIO_Backup {
 
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_ofio_backup_path'" );
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->postmeta} WHERE meta_key = %s",
+				'_ofio_backup_path'
+			)
+		);
 
-		// Bust restorable-IDs cache after purge.
 		wp_cache_delete( 'ofio_count_restorable', 'ofio' );
 
 		return array(
 			'success' => true,
 			'deleted' => $deleted,
 			'message' => sprintf(
-				/* translators: %d: number of deleted backup files */
+				/* translators: %d: count */
 				__( 'Purged %d backup files.', 'optiforge-image-optimizer' ),
 				$deleted
 			),
 		);
 	}
 
-	// -------------------------------------------------------------------------
-	// Private Helpers
-	// -------------------------------------------------------------------------
-
 	/**
-	 * Build the expected backup file path for an attachment.
+	 * Build backup file path for an attachment.
 	 *
-	 * Format: `ofio-backups/ofio-{ID}.{ext}`
-	 *
-	 * @param int    $attachment_id Attachment post ID.
-	 * @param string $source_file   Absolute path to the source file.
+	 * @param int    $attachment_id Attachment ID.
+	 * @param string $source_file   Source file path.
 	 * @return string
 	 */
 	private function get_backup_path( int $attachment_id, string $source_file ): string {
-		$ext = strtolower( pathinfo( $source_file, PATHINFO_EXTENSION ) );
+		$ext = strtolower( (string) pathinfo( $source_file, PATHINFO_EXTENSION ) );
 		return trailingslashit( $this->backup_dir ) . 'ofio-' . $attachment_id . '.' . $ext;
 	}
+}
+
+// Backwards-compatible class aliases.
+if ( ! class_exists( 'OFIO_Backup', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\Backup', 'OFIO_Backup' );
+}
+if ( ! class_exists( '\OptiForge\ImageOptimizer\Backup', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\Backup', '\OptiForge\ImageOptimizer\Backup' );
+}
+if ( ! class_exists( '\OptiForge_Image_Optimizer\Backup', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\Backup', '\OptiForge_Image_Optimizer\Backup' );
 }

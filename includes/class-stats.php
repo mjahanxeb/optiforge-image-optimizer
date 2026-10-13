@@ -1,19 +1,35 @@
 <?php
+// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 /**
- * Statistics Engine with JPEG, PNG, and WebP Support.
+ * High-Speed Statistics Engine with Aggressive Transient Caching.
  *
  * @package OptiForge_Image_Optimizer
  */
+
+// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound
+namespace Optiforge_Image_Optimizer;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class OFIO_Stats {
+/**
+ * Class Stats
+ */
+class Stats {
 
-	const OPTION_KEY = 'ofio_stats';
-	const CACHE_KEY  = 'ofio_stats_cache';
+	const OPTION_KEY              = 'ofio_stats';
+	const CACHE_KEY               = 'ofio_stats_cache';
+	const TOTAL_COUNT_CACHE_KEY   = 'ofio_total_images_count';
+	const UNOPT_COUNT_CACHE_KEY   = 'ofio_unoptimized_count';
 
+	/**
+	 * Record optimization results and increment aggregate telemetry.
+	 *
+	 * @param int   $attachment_id Attachment ID.
+	 * @param array $result        Optimization result array.
+	 * @return void
+	 */
 	public function record( int $attachment_id, array $result ): void {
 		$is_success = ! empty( $result['success'] );
 
@@ -57,22 +73,44 @@ class OFIO_Stats {
 		$this->save_raw( $raw );
 	}
 
+	/**
+	 * Record single-image restoration.
+	 *
+	 * @param int $attachment_id Attachment ID.
+	 * @return void
+	 */
 	public function record_restore( int $attachment_id ): void {
 		$existing_meta = get_post_meta( $attachment_id, '_ofio_meta', true );
-		if ( empty( $existing_meta ) || ! is_array( $existing_meta ) || ( $existing_meta['status'] ?? '' ) !== 'optimized' ) {
-			return;
+		$raw           = $this->get_raw();
+
+		if ( ! empty( $existing_meta ) && is_array( $existing_meta ) && ( $existing_meta['status'] ?? '' ) === 'optimized' ) {
+			$saved_bytes   = (int) ( $existing_meta['saved_bytes'] ?? 0 );
+			$original_size = (int) ( $existing_meta['original_size'] ?? 0 );
+			$new_size      = (int) ( $existing_meta['optimized_size'] ?? 0 );
+
+			$raw['saved_bytes']   = max( 0, (int) $raw['saved_bytes'] - $saved_bytes );
+			$raw['original_size'] = max( 0, (int) $raw['original_size'] - $original_size );
+			$raw['new_size']      = max( 0, (int) $raw['new_size'] - $new_size );
 		}
 
-		$raw = $this->get_raw();
 		$raw['optimized_images'] = max( 0, (int) $raw['optimized_images'] - 1 );
-		$raw['saved_bytes']      = max( 0, (int) $raw['saved_bytes'] - (int) ( $existing_meta['saved_bytes'] ?? 0 ) );
-		$raw['original_size']    = max( 0, (int) $raw['original_size'] - (int) ( $existing_meta['original_size'] ?? 0 ) );
-		$raw['new_size']         = max( 0, (int) $raw['new_size'] - (int) ( $existing_meta['optimized_size'] ?? 0 ) );
+
+		if ( 0 === $raw['optimized_images'] ) {
+			$raw['saved_bytes']   = 0;
+			$raw['original_size'] = 0;
+			$raw['new_size']      = 0;
+		}
 
 		$this->save_raw( $raw );
+		delete_post_meta( $attachment_id, '_ofio_meta' );
 		$this->clear_all_caches();
 	}
 
+	/**
+	 * Retrieve dashboard statistics instantly from transient cache.
+	 *
+	 * @return array
+	 */
 	public function get(): array {
 		$cached = get_transient( self::CACHE_KEY );
 		if ( false !== $cached && is_array( $cached ) ) {
@@ -84,7 +122,7 @@ class OFIO_Stats {
 		$saved_bytes   = (int) $raw['saved_bytes'];
 		$original_size = (int) $raw['original_size'];
 
-		$pct_saved = ( $original_size > 0 )
+		$pct_saved = ( $original_size > 0 && $saved_bytes > 0 )
 			? round( ( $saved_bytes / $original_size ) * 100, 1 )
 			: 0.0;
 
@@ -99,94 +137,184 @@ class OFIO_Stats {
 			'pct_saved'        => $pct_saved,
 		);
 
-		set_transient( self::CACHE_KEY, $stats, 15 );
+		set_transient( self::CACHE_KEY, $stats, 30 );
 		return $stats;
 	}
 
+	/**
+	 * Count total images in the media library with transient caching.
+	 *
+	 * @return int
+	 */
 	public function count_total_images(): int {
-		global $wpdb;
+		$cached = get_transient( self::TOTAL_COUNT_CACHE_KEY );
+		if ( false !== $cached ) {
+			return (int) $cached;
+		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$count = $wpdb->get_var(
-			"SELECT COUNT(ID) FROM {$wpdb->posts}
-			 WHERE post_type = 'attachment'
-			 AND post_status = 'inherit'
-			 AND post_mime_type IN ('image/jpeg', 'image/png', 'image/webp')"
+		global $wpdb;
+		$count = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(ID) FROM {$wpdb->posts} 
+				 WHERE post_type = %s
+				 AND post_status IN (%s, %s, %s)
+				 AND post_mime_type IN (%s, %s, %s, %s)",
+				'attachment',
+				'inherit',
+				'publish',
+				'private',
+				'image/jpeg',
+				'image/png',
+				'image/webp',
+				'image/gif'
+			)
 		);
 
-		return (int) $count;
+		set_transient( self::TOTAL_COUNT_CACHE_KEY, $count, 300 );
+		return $count;
 	}
 
+	/**
+	 * Count unoptimized images in the media library with transient caching.
+	 *
+	 * @return int
+	 */
 	public function count_unoptimized_images(): int {
-		global $wpdb;
+		$cached = get_transient( self::UNOPT_COUNT_CACHE_KEY );
+		if ( false !== $cached ) {
+			return (int) $cached;
+		}
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$count = $wpdb->get_var(
-			"SELECT COUNT(p.ID) FROM {$wpdb->posts} p
-			 LEFT JOIN {$wpdb->postmeta} pm ON (p.ID = pm.post_id AND pm.meta_key = '_ofio_meta')
-			 WHERE p.post_type = 'attachment'
-			 AND p.post_status = 'inherit'
-			 AND p.post_mime_type IN ('image/jpeg', 'image/png', 'image/webp')
-			 AND pm.meta_id IS NULL"
+		global $wpdb;
+		$count = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(p.ID) FROM {$wpdb->posts} p 
+				 WHERE p.post_type = %s
+				 AND p.post_status IN (%s, %s, %s)
+				 AND p.post_mime_type IN (%s, %s, %s, %s)
+				 AND NOT EXISTS (
+					 SELECT 1 FROM {$wpdb->postmeta} pm 
+					 WHERE pm.post_id = p.ID 
+					 AND pm.meta_key = %s
+				 )",
+				'attachment',
+				'inherit',
+				'publish',
+				'private',
+				'image/jpeg',
+				'image/png',
+				'image/webp',
+				'image/gif',
+				'_ofio_meta'
+			)
 		);
 
-		return (int) $count;
+		set_transient( self::UNOPT_COUNT_CACHE_KEY, $count, 300 );
+		return $count;
 	}
 
+	/**
+	 * Retrieve unoptimized attachment IDs.
+	 *
+	 * @param int  $limit     Limit of IDs to return (0 = all).
+	 * @param bool $force_all Whether to ignore optimization status.
+	 * @param int  $offset    Offset.
+	 * @return int[]
+	 */
 	public function get_unoptimized_ids( int $limit = 500, bool $force_all = false, int $offset = 0 ): array {
 		global $wpdb;
 
 		if ( $force_all ) {
 			if ( $limit > 0 ) {
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 				$ids = $wpdb->get_col(
 					$wpdb->prepare(
-						"SELECT ID FROM {$wpdb->posts}
-						WHERE post_type = 'attachment'
-						AND post_status = 'inherit'
-						AND post_mime_type IN ('image/jpeg', 'image/png', 'image/webp')
-						ORDER BY ID ASC
-						LIMIT %d OFFSET %d",
+						"SELECT ID FROM {$wpdb->posts} 
+						 WHERE post_type = %s
+						 AND post_status IN (%s, %s, %s)
+						 AND post_mime_type IN (%s, %s, %s, %s)
+						 ORDER BY ID ASC
+						 LIMIT %d OFFSET %d",
+						'attachment',
+						'inherit',
+						'publish',
+						'private',
+						'image/jpeg',
+						'image/png',
+						'image/webp',
+						'image/gif',
 						$limit,
 						max( 0, $offset )
 					)
 				);
 			} else {
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 				$ids = $wpdb->get_col(
-					"SELECT ID FROM {$wpdb->posts}
-					WHERE post_type = 'attachment'
-					AND post_status = 'inherit'
-					AND post_mime_type IN ('image/jpeg', 'image/png', 'image/webp')
-					ORDER BY ID ASC"
+					$wpdb->prepare(
+						"SELECT ID FROM {$wpdb->posts} 
+						 WHERE post_type = %s
+						 AND post_status IN (%s, %s, %s)
+						 AND post_mime_type IN (%s, %s, %s, %s)
+						 ORDER BY ID ASC",
+						'attachment',
+						'inherit',
+						'publish',
+						'private',
+						'image/jpeg',
+						'image/png',
+						'image/webp',
+						'image/gif'
+					)
 				);
 			}
 		} else {
 			if ( $limit > 0 ) {
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 				$ids = $wpdb->get_col(
 					$wpdb->prepare(
-						"SELECT p.ID FROM {$wpdb->posts} p
-						LEFT JOIN {$wpdb->postmeta} pm ON (p.ID = pm.post_id AND pm.meta_key = '_ofio_meta')
-						WHERE p.post_type = 'attachment'
-						AND p.post_status = 'inherit'
-						AND p.post_mime_type IN ('image/jpeg', 'image/png', 'image/webp')
-						AND pm.meta_id IS NULL
-						ORDER BY p.ID DESC
-						LIMIT %d",
+						"SELECT p.ID FROM {$wpdb->posts} p 
+						 WHERE p.post_type = %s
+						 AND p.post_status IN (%s, %s, %s)
+						 AND p.post_mime_type IN (%s, %s, %s, %s)
+						 AND NOT EXISTS (
+							 SELECT 1 FROM {$wpdb->postmeta} pm 
+							 WHERE pm.post_id = p.ID 
+							 AND pm.meta_key = %s
+						 )
+						 ORDER BY p.ID DESC
+						 LIMIT %d",
+						'attachment',
+						'inherit',
+						'publish',
+						'private',
+						'image/jpeg',
+						'image/png',
+						'image/webp',
+						'image/gif',
+						'_ofio_meta',
 						$limit
 					)
 				);
 			} else {
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 				$ids = $wpdb->get_col(
-					"SELECT p.ID FROM {$wpdb->posts} p
-					LEFT JOIN {$wpdb->postmeta} pm ON (p.ID = pm.post_id AND pm.meta_key = '_ofio_meta')
-					WHERE p.post_type = 'attachment'
-					AND p.post_status = 'inherit'
-					AND p.post_mime_type IN ('image/jpeg', 'image/png', 'image/webp')
-					AND pm.meta_id IS NULL
-					ORDER BY p.ID DESC"
+					$wpdb->prepare(
+						"SELECT p.ID FROM {$wpdb->posts} p 
+						 WHERE p.post_type = %s
+						 AND p.post_status IN (%s, %s, %s)
+						 AND p.post_mime_type IN (%s, %s, %s, %s)
+						 AND NOT EXISTS (
+							 SELECT 1 FROM {$wpdb->postmeta} pm 
+							 WHERE pm.post_id = p.ID 
+							 AND pm.meta_key = %s
+						 )
+						 ORDER BY p.ID DESC",
+						'attachment',
+						'inherit',
+						'publish',
+						'private',
+						'image/jpeg',
+						'image/png',
+						'image/webp',
+						'image/gif',
+						'_ofio_meta'
+					)
 				);
 			}
 		}
@@ -194,10 +322,15 @@ class OFIO_Stats {
 		return array_map( 'absint', (array) $ids );
 	}
 
+	/**
+	 * Reset all statistics cleanly to zero.
+	 *
+	 * @return void
+	 */
 	public function reset(): void {
 		$this->save_raw(
 			array(
-				'total_images'     => 0,
+				'total_images'     => $this->count_total_images(),
 				'optimized_images' => 0,
 				'original_size'    => 0,
 				'new_size'         => 0,
@@ -207,17 +340,33 @@ class OFIO_Stats {
 		$this->clear_all_caches();
 
 		global $wpdb;
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_ofio_meta'" );
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->postmeta} WHERE meta_key = %s",
+				'_ofio_meta'
+			)
+		);
 	}
 
+	/**
+	 * Flush all statistics transients and object caches.
+	 *
+	 * @return void
+	 */
 	public function clear_all_caches(): void {
 		delete_transient( self::CACHE_KEY );
+		delete_transient( self::TOTAL_COUNT_CACHE_KEY );
+		delete_transient( self::UNOPT_COUNT_CACHE_KEY );
 		delete_transient( 'ofio_unoptimized_ids' );
 		wp_cache_delete( 'ofio_total_images_count', 'ofio' );
 		wp_cache_delete( 'ofio_unoptimized_count', 'ofio' );
 	}
 
+	/**
+	 * Retrieve raw stats array from options.
+	 *
+	 * @return array
+	 */
 	private function get_raw(): array {
 		return wp_parse_args(
 			(array) get_option( self::OPTION_KEY, array() ),
@@ -231,7 +380,25 @@ class OFIO_Stats {
 		);
 	}
 
+	/**
+	 * Persist raw stats array to options.
+	 *
+	 * @param array $stats Stats data.
+	 * @return void
+	 */
 	private function save_raw( array $stats ): void {
 		update_option( self::OPTION_KEY, $stats, false );
 	}
 }
+
+// Backwards-compatible class aliases.
+if ( ! class_exists( 'OFIO_Stats', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\Stats', 'OFIO_Stats' );
+}
+if ( ! class_exists( '\OptiForge\ImageOptimizer\Stats', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\Stats', '\OptiForge\ImageOptimizer\Stats' );
+}
+if ( ! class_exists( '\OptiForge_Image_Optimizer\Stats', false ) ) {
+	class_alias( '\Optiforge_Image_Optimizer\Stats', '\OptiForge_Image_Optimizer\Stats' );
+}
+// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
